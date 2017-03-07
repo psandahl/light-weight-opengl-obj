@@ -3,12 +3,17 @@ module Graphics.OBJ.Assembly
     ( basicAssembly
     ) where
 
-import           Data.List           (foldl')
-import           Data.Vector         (Vector)
-import qualified Data.Vector         as Vector
-import           Graphics.GL         (GLfloat)
-import           Graphics.OBJ.Parser (Elem (..), Face (..), Part (..), fromFile)
-import           Linear              (V2, V3)
+import           Control.Monad.State             (State, evalState, get, put)
+import           Data.List                       (foldl')
+import           Data.Map                        (Map)
+import qualified Data.Map                        as Map
+import           Data.Vector                     (Vector)
+import qualified Data.Vector                     as Vector
+import           Graphics.GL                     (GLfloat, GLuint)
+import qualified Graphics.LWGL.Vertex_P_Norm_Tex as VTN
+import           Graphics.OBJ.Parser             (Elem (..), Face (..),
+                                                  Part (..), fromFile)
+import           Linear                          (V2, V3)
 
 data Assembly
     = VAssembly !(Vector (V3 GLfloat)) !(Vector Face)
@@ -91,3 +96,16 @@ vtn face =
     case face of
         Triangle (VTN _ _ _) (VTN _ _ _) (VTN _ _ _) -> True
         _                                            -> False
+
+populateVTNMap :: Vector (V3 GLfloat)
+               -> Vector (V3 GLfloat)
+               -> Vector (V2 GLfloat)
+               -> Vector Face
+               -> State GLuint (Map Face (GLuint, VTN.Vertex))
+populateVTNMap vertices normals texCoords faces = undefined
+
+nextIndex :: State GLuint GLuint
+nextIndex = do
+    val <- get
+    put (val + 1)
+    return (val + 1)
