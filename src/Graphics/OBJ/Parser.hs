@@ -42,7 +42,7 @@ data Elem
     = V !Int
     | VN !Int !Int
     | VTN !Int !Int !Int
-    deriving Show
+    deriving (Eq, Ord, Show)
 
 -- | Parse the file to parts.
 fromFile :: FilePath -> IO (Either String [Part])
