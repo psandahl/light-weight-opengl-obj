@@ -9,4 +9,8 @@
 --
 -- Loading a subset of Wavefront OBJ files in a way that fit together with
 -- LWGL.
-module Graphics.OBJ where
+module Graphics.OBJ
+    ( loadVTNFromFile
+    ) where
+
+import           Graphics.OBJ.Assembly
