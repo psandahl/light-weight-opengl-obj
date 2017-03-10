@@ -10,6 +10,7 @@ import           Data.Map                        (Map)
 import qualified Data.Map                        as Map
 import           Data.Vector                     (Vector, (!))
 import qualified Data.Vector                     as Vector
+import qualified Data.Vector.Storable            as S
 import           Graphics.GL                     (GLfloat, GLuint)
 import qualified Graphics.LWGL.Vertex_P_Norm_Tex as VTN
 import           Graphics.OBJ.Parser             (Elem (..), Face (..),
@@ -23,15 +24,17 @@ data Assembly
     | BrokenAssembly
     deriving Show
 
-loadVTNFromFile :: FilePath -> IO (Either String (Vector VTN.Vertex, Vector GLuint))
+-- TODO: Look through the usage of vectors. At least the index vector could be
+-- storable from the beginning.
+loadVTNFromFile :: FilePath -> IO (Either String (S.Vector VTN.Vertex, S.Vector GLuint))
 loadVTNFromFile file = do
     parseResult <- fromFile file
     case parseResult of
         Right parts ->
             case basicAssembly parts of
-                VTNAssembly verts normals texCoords faces ->
-                    return $ Right
-                        (evalState (assembleVTN verts normals texCoords faces) emptyState)
+                VTNAssembly verts normals texCoords faces -> do
+                    let (vs, is) = evalState (assembleVTN verts normals texCoords faces) emptyState
+                    return $ Right (Vector.convert vs, Vector.convert is)
 
                 BrokenAssembly -> return $ Left "Internal model inconsistency"
 
