@@ -32,6 +32,9 @@ data Part
     | Normal !(V3 GLfloat)
     | TexCoord !(V2 GLfloat)
     | Face !Face
+    | Mtllib !String
+    | Usemtl !String
+    | S !String
     deriving Show
 
 data Face
@@ -63,12 +66,21 @@ parts = manyTill (sc *> part) eof
 
 -- | Parse one part.
 part :: Parser Part
-part =  try vertex' <|> try normal' <|> try texCoord' <|> try face'
+part =  try vertex'
+    <|> try normal'
+    <|> try texCoord'
+    <|> try face'
+    <|> try mtllib'
+    <|> try usemtl'
+    <|> try s'
     where
         vertex' = Vertex <$> lexeme vertex
         normal' = Normal <$> lexeme normal
         texCoord' = TexCoord <$> lexeme texCoord
         face' = Face <$> lexeme triangle
+        mtllib' = Mtllib <$> lexeme mtllibDecl
+        usemtl' = Usemtl <$> lexeme usemtlDecl
+        s' = S <$> lexeme sDecl
 
 -- | Parse one vertex.
 vertex :: Parser (V3 GLfloat)
@@ -114,6 +126,18 @@ glFloat = toRealFloat <$> Lexer.signed sc Lexer.scientific
 int :: Parser Int
 int = fromIntegral <$> Lexer.signed sc Lexer.integer
 
+-- | Parse mtllib declaration.
+mtllibDecl :: Parser String
+mtllibDecl = mtllib *> lexeme grabText
+
+-- | Parse usemtl declaration.
+usemtlDecl :: Parser String
+usemtlDecl = usemtl *> lexeme grabText
+
+-- | Parse s declaration.
+sDecl :: Parser String
+sDecl = s *> lexeme grabText
+
 -- | Parse the keyword "v" which initiates a vertex specification.
 v :: Parser ()
 v = void $ Lexer.symbol sc "v"
@@ -129,6 +153,22 @@ vt = void $ Lexer.symbol sc "vt"
 -- | Parse the keyword "f" which initiates a face element specification.
 f :: Parser ()
 f = void $ Lexer.symbol sc "f"
+
+-- | Parse the keyword "s" which initiates a smooth group element specification.
+s :: Parser ()
+s = void $ Lexer.symbol sc "s"
+
+-- | Parse the keyword "mtllib" which initiates a mtllib element specification.
+mtllib :: Parser ()
+mtllib = void $ Lexer.symbol sc "mtllib"
+
+-- | Parse the keywork "usemtl" which initiates an usemtl element specification.
+usemtl :: Parser ()
+usemtl = void $ Lexer.symbol sc "usemtl"
+
+-- | Grab alphanumeric text until any space character.
+grabText :: Parser String
+grabText = manyTill asciiChar spaceChar
 
 -- | Space consumer; either whitespaces or line comments starting with '#'.
 sc :: Parser ()
