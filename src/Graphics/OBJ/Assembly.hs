@@ -1,6 +1,7 @@
 {-# LANGUAGE MultiWayIf #-}
 module Graphics.OBJ.Assembly
-    ( loadVTNFromFile
+    ( ObjData (..)
+    , loadObjFromFile
     ) where
 
 import           Control.Monad                   (when)
@@ -12,10 +13,16 @@ import           Data.Vector                     (Vector, (!))
 import qualified Data.Vector                     as Vector
 import qualified Data.Vector.Storable            as S
 import           Graphics.GL                     (GLfloat, GLuint)
+import qualified Graphics.LWGL.Vertex_P_Norm     as VN
 import qualified Graphics.LWGL.Vertex_P_Norm_Tex as VTN
 import           Graphics.OBJ.Parser             (Elem (..), Face (..),
                                                   Part (..), fromFile)
 import           Linear                          (V2, V3)
+
+data ObjData
+    = WithTextureAndNormal !(S.Vector VTN.Vertex) !(S.Vector GLuint)
+    | WithNormal !(S.Vector VN.Vertex) !(S.Vector GLuint)
+    deriving Show
 
 data Assembly
     = VAssembly !(Vector (V3 GLfloat)) !(Vector Face)
@@ -26,19 +33,23 @@ data Assembly
 
 -- TODO: Look through the usage of vectors. At least the index vector could be
 -- storable from the beginning.
-loadVTNFromFile :: FilePath -> IO (Either String (S.Vector VTN.Vertex, S.Vector GLuint))
-loadVTNFromFile file = do
+loadObjFromFile :: FilePath -> IO (Either String ObjData)
+loadObjFromFile file = do
     parseResult <- fromFile file
     case parseResult of
         Right parts ->
             case basicAssembly parts of
+                VNAssembly verts normals faces -> do
+                    let (vs, is) = evalState (assembleVN verts normals faces) emptyState
+                    return $ Right $ WithNormal (Vector.convert vs) (Vector.convert is)
+
                 VTNAssembly verts normals texCoords faces -> do
                     let (vs, is) = evalState (assembleVTN verts normals texCoords faces) emptyState
-                    return $ Right (Vector.convert vs, Vector.convert is)
+                    return $ Right $ WithTextureAndNormal (Vector.convert vs) (Vector.convert is)
 
                 BrokenAssembly -> return $ Left "Internal model inconsistency"
 
-                _              -> return $ Left "Not a VTN model"
+                _              -> return $ Left "Not supported model"
 
         Left err    -> return $ Left err
 
@@ -127,6 +138,16 @@ data AssemblyState a = AssemblyState !GLuint !(AssemblyMap a)
 emptyState :: AssemblyState a
 emptyState = AssemblyState 0 Map.empty
 
+assembleVN :: Vector (V3 GLfloat)
+           -> Vector (V3 GLfloat)
+           -> Vector Face
+           -> State (AssemblyState VN.Vertex) (Vector VN.Vertex, Vector GLuint)
+assembleVN verts normals faces = do
+    populateVNMap verts normals faces
+    vertices <- makeVertexVector
+    indices <- makeIndexVector faces
+    return (vertices, indices)
+
 assembleVTN :: Vector (V3 GLfloat)
             -> Vector (V3 GLfloat)
             -> Vector (V2 GLfloat)
@@ -137,6 +158,32 @@ assembleVTN verts normals texCoords faces = do
     vertices <- makeVertexVector
     indices <- makeIndexVector faces
     return (vertices, indices)
+
+-- | Populate a Map with VN vertices. Each entry maps to a unique key made up
+-- from the face specification (with v//n). Each entry is assigned an index
+-- value that will be used as index into a VBO.
+populateVNMap :: Vector (V3 GLfloat)
+              -> Vector (V3 GLfloat)
+              -> Vector Face
+              -> State (AssemblyState VN.Vertex) ()
+populateVNMap vertices normals faces =
+    Vector.forM_ faces $
+        \(Triangle e1@(VN v1 n1) e2@(VN v2 n2) e3@(VN v3 n3)) -> do
+            let vert1 = VN.Vertex
+                            { VN.position = vertices ! (v1 - 1)
+                            , VN.normal = normals ! (n1 - 1)
+                            }
+                vert2 = VN.Vertex
+                            { VN.position = vertices ! (v2 - 1)
+                            , VN.normal = normals ! (n2 - 1)
+                            }
+                vert3 = VN.Vertex
+                            { VN.position = vertices ! (v3 - 1)
+                            , VN.normal = normals ! (n3 - 1)
+                            }
+            insertIfNeeded e1 vert1
+            insertIfNeeded e2 vert2
+            insertIfNeeded e3 vert3
 
 -- | Populate a Map with VTN vertices. Each entry maps to a unique key made up
 -- from the face specification (with v/t/n). Each entry is assigned an index
